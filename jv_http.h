@@ -345,21 +345,7 @@ static jvh_error jvh__send(jvh_response *response, const char *data, int datalen
     return JVH_ERR_OK;
 }
 
-JVHDEF jvh_error jvh_recv_chunk(jvh_response *response, char *return_buffer, int buffer_size, int *bytes_read) {
-    // First check if we have something buffered in the response
-    if(response->_buffer_offset != 0 && response->_buffer_offset < response->_bytes_in_buffer) {
-        int left_in_buffer = response->_bytes_in_buffer - response->_buffer_offset;
-        int bytes_to_copy = left_in_buffer;
-        if(bytes_to_copy > buffer_size) {
-            bytes_to_copy = buffer_size;
-        }
-        memcpy(return_buffer, response->_buffer + response->_buffer_offset, bytes_to_copy);
-        response->_buffer_offset += bytes_to_copy;
-        *bytes_read = bytes_to_copy;
-        return JVH_ERR_OK;
-    }
-
-    // Ok, no buffered data, request more from server
+static jvh_error jvh__receive(jvh_response *response, char *return_buffer, int buffer_size, int *bytes_read) {
     int _bytes_read = recv(RESP_SOCKET(response), return_buffer, buffer_size, 0);
     if(_bytes_read > 0) {
         *bytes_read = _bytes_read;
@@ -381,6 +367,18 @@ JVHDEF jvh_error jvh_close(jvh_response *response) {
     }
     return JVH_ERR_OK;
 }
+
+#else
+// ----------------------------
+//  BSD Sockets implementation
+// ----------------------------
+
+// @TODO: do all this!
+#endif // !JV_PLATFORM_WINSOCK
+
+// ----------------------------
+// Multiplatform code
+// ----------------------------
 
 static int jvh__str_find_first(const char *s, char c, int max_len) {
     int result = -1;
@@ -421,13 +419,12 @@ static jvh_error jvh__parse_headers(jvh_response *response) {
 }
 
 JVHDEF jvh_error jvh_request(struct jvh_env *env, const char *server_name, const char *port, jvh_response *response, const char *request_template, ...) {
-    int errcode = 0;
-    jvh_error result = JVH_ERR_OK;
+    jvh_error errcode = JVH_ERR_OK;
     char *reqData = NULL;
 
     response->status_code = -1;
 
-    if((errcode = jvh__connect(env, server_name, port, response)) != 0) {
+    if((errcode = jvh__connect(env, server_name, port, response)) != JVH_ERR_OK) {
         goto handleErr;
     }
     va_list args;
@@ -438,32 +435,41 @@ JVHDEF jvh_error jvh_request(struct jvh_env *env, const char *server_name, const
     vsprintf(reqData, request_template, args);
     reqData[reqDataLen] = 0;
 
-    if((errcode = jvh__send(response, reqData, reqDataLen)) != 0) {
+    if((errcode = jvh__send(response, reqData, reqDataLen)) != JVH_ERR_OK) {
         goto handleErr;
     }
 
-    if((errcode = jvh__parse_headers(response)) != 0) {
+    if((errcode = jvh__parse_headers(response)) != JVH_ERR_OK) {
         goto handleErr;
     }
 
     goto tearDown;
 
 handleErr:
-    result = jvh__translate_wsaerror(errcode);
     jvh_close(response);
 
 tearDown:
     JV_HTTP_FREE(reqData);
-    return result;
+    return errcode;
 }
 
-#else
-// ----------------------------
-//  BSD Sockets implementation
-// ----------------------------
+JVHDEF jvh_error jvh_recv_chunk(jvh_response *response, char *return_buffer, int buffer_size, int *bytes_read) {
+    // First check if we have something buffered in the response
+    if(response->_buffer_offset != 0 && response->_buffer_offset < response->_bytes_in_buffer) {
+        int left_in_buffer = response->_bytes_in_buffer - response->_buffer_offset;
+        int bytes_to_copy = left_in_buffer;
+        if(bytes_to_copy > buffer_size) {
+            bytes_to_copy = buffer_size;
+        }
+        memcpy(return_buffer, response->_buffer + response->_buffer_offset, bytes_to_copy);
+        response->_buffer_offset += bytes_to_copy;
+        *bytes_read = bytes_to_copy;
+        return JVH_ERR_OK;
+    }
 
-// @TODO: do all this!
-#endif // !JV_PLATFORM_WINSOCK
+    // Ok, no buffered data, request more from server
+    return jvh__receive(response, return_buffer, buffer_size, bytes_read);
+}
 
 #endif // JV_HTTP_IMPLEMENTATION
 #endif // JV_INCLUDE_HTTP_H
