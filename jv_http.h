@@ -425,6 +425,8 @@ JVHDEF jvh_error jvh_request(struct jvh_env *env, const char *server_name, const
     jvh_error result = JVH_ERR_OK;
     char *reqData = NULL;
 
+    response->status_code = -1;
+
     if((errcode = jvh__connect(env, server_name, port, response)) != 0) {
         goto handleErr;
     }
