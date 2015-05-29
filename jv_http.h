@@ -11,7 +11,30 @@
      #include ...
      #define JV_HTTP_IMPLEMENTATION
      #include "jv_http.h"
- 
+
+Usage:
+
+    As a gentle introduction, here's the code needed to send a simple analytics
+    request:
+
+        jvh_env jvhEnvironment;
+        jvh_init(&jvhEnvironment);
+
+        jvh_response Response;
+        jvh_simple_get(&jvhEnvironment, "mywebsite.com", "80", "/analytics?ID=11111", &Response));
+        if(Response.status_code != 200){
+            // Something went wrong!
+        }
+        jvh_close(&Response);
+        jvh_stop(&jvhEnvironment);
+
+    There is also a full example in the section named "Example program". That 
+    should be enough to get you started. 
+
+    Also, in the "Library configuration" section just below, you'll find all 
+    available options to modify the library to your needs, like the user-agent
+    or the memory allocation functions
+
 License:
    This software is in the public domain. Where that dedication is not
    recognized, you are granted a perpetual, irrevocable license to copy
@@ -24,30 +47,52 @@ Acknowledgements:
 #ifndef JV_INCLUDE_HTTP_H
 #define JV_INCLUDE_HTTP_H
 
+// ----------------------------------------------
+// Library configuration
+//
 #ifdef JV_HTTP_STATIC
 #define JVHDEF static
 #else
 #define JVHDEF extern
 #endif
 
+// Substitute these two to use your own memory management functions
 #ifndef JV_HTTP_MALLOC
-#define JV_HTTP_MALLOC malloc
+#define JV_HTTP_MALLOC(sz) malloc(sz)
+#define JV_HTTP_FREE(p) free(p)
 #endif
 
-#ifndef JV_HTTP_FREE
-#define JV_HTTP_FREE free
+#ifndef JV_HTTP_RESPONSE_BUFFER_LEN
+#define JV_HTTP_RESPONSE_BUFFER_LEN 8192 // Note: right now this has to be big
+#endif                                   // enough to hold the entire HTTP header
+
+#ifndef JV_HTTP_USER_AGENT
+#define JV_HTTP_USER_AGENT "Mozilla/5.0 (Windows NT 6.1; WOW64) \
+                            AppleWebKit/537.36 (KHTML, like Gecko) \
+                            Chrome/42.0.2311.90 Safari/537.36"
 #endif
 
-#include "stdio.h"
+#ifndef JV_HTTP_PROTOCOL
+#define JV_HTTP_PROTOCOL "HTTP/1.0" // Note: We use 1.0 because 1.1 has chunked/gzipped
+#endif                              // transports, and we don't support those yet
+
+//
+// ----------------------------------------------
+
+#include <string.h>
 
 #ifdef _MSC_VER
+
 #define JV_PLATFORM_WINSOCK
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "Ws2_32")
 #pragma comment(lib, "Mswsock")
-#else
+
+#else // !_MSC_VER
+
 #define JV_PLATFORM_BSDSOCK
+
 #endif
 
 struct jvh_env;
@@ -76,8 +121,6 @@ typedef enum {
     JVH_ERR_UNKNOWN = 5000,
 } jvh_error;
 
-#define JV_HTTP_RESPONSE_BUFFER_LEN 8192
-
 typedef struct {
     int status_code;
     char _buffer[JV_HTTP_RESPONSE_BUFFER_LEN];
@@ -91,37 +134,53 @@ JVHDEF jvh_error jvh_stop(struct jvh_env *env);
 
 JVHDEF jvh_error jvh_request(struct jvh_env *env, const char *server_name, const char *port, jvh_response *response, const char *requestTemplate, ...);
 
+JVHDEF jvh_error jvh_simple_req(struct jvh_env *env, const char *method, const char *server_name, const char *port, const char *url, const char *contents, jvh_response *response) {
+    return jvh_request(env, server_name, port, response,
+                       "%s %s " JV_HTTP_PROTOCOL "\r\n\
+                        Host: %s\r\n\
+                        User-Agent:" JV_HTTP_USER_AGENT "\r\n\r\n%s",
+                       method, url, server_name, contents);
+}
+
 JVHDEF jvh_error jvh_simple_get(struct jvh_env *env, const char *server_name, const char *port, const char *url, jvh_response *response) {
-    return jvh_request(env, server_name, port, response, "GET %s HTTP/1.0\r\n\r\n", url);
+    return jvh_simple_req(env, "GET", server_name, port, url, "", response);
 }
 
 JVHDEF jvh_error jvh_recv_chunk(jvh_response *response, char *return_buffer, int buffer_size, int *bytes_read);
 JVHDEF jvh_error jvh_close(jvh_response *response);
 
-#define JV_HTTP_STATIC_ASSERT(COND, MSG) typedef char static_assertion_##MSG[(COND) ? 1 : -1]
-
 #ifdef JV_PLATFORM_WINSOCK
 // -----------------
 //  Windows structs
-// -----------------
-
+//
 typedef struct jvh_env {
     WSADATA wsa;
 } jvh_env;
 
-JV_HTTP_STATIC_ASSERT(sizeof(SOCKET) <= sizeof(((jvh_response *)0)->_internal), jvh_response_internal_field_must_be_big_enough_for_SOCKET);
+#define JV_HTTP_STATIC_ASSERT(COND, MSG) typedef char static_assertion_##MSG[(COND) ? 1 : -1]
 
-#else
+JV_HTTP_STATIC_ASSERT(sizeof(SOCKET) <= sizeof(((jvh_response *)0)->_internal), jvh_response_internal_field_must_be_big_enough_for_SOCKET);
+//
+// -----------------
+
+#else // JV_PLATFORM_WINSOCK
 // ---------------------
 //  BSD Sockets structs
+//
+
+// @TODO
+
+//
 // ---------------------
 
-#endif
+#endif // !JV_PLATFORM_WINSOCK
 
 // ===========================================================================
 //  Example program:
 // ===========================================================================
+
 #ifdef JV_HTTP_TEST
+
 #define CHECK(x)                                              \
     if((err = x) != JVH_ERR_OK) {                             \
         printf("ERROR: code %d at line %d\n", err, __LINE__); \
@@ -136,6 +195,8 @@ int main(int argc, wchar_t *argv[]) {
     CHECK(jvh_init(&jvhEnvironment));
     jvh_response Response;
     CHECK(jvh_simple_get(&jvhEnvironment, "hombrealto.com", "80", "/", &Response));
+    printf("Response code: %d\n", Response.status_code);
+    printf("Response contents:\n");
     char response[RESPONSE_SIZE + 1];
     int BytesRead;
     CHECK(jvh_recv_chunk(&Response, response, RESPONSE_SIZE, &BytesRead));
@@ -147,16 +208,18 @@ int main(int argc, wchar_t *argv[]) {
     CHECK(jvh_close(&Response));
     CHECK(jvh_stop(&jvhEnvironment));
 
+#undef CHECK
     return 0;
 }
 
 #define JV_HTTP_IMPLEMENTATION
 
-#undef CHECK
-#endif
+#endif // JV_HTTP_TEST
+
+// ===========================================================================
+// ===========================================================================
 
 #ifdef JV_HTTP_IMPLEMENTATION
-// ===========================================================================
 
 #ifdef JV_PLATFORM_WINSOCK
 // -----------------
@@ -305,6 +368,7 @@ JVHDEF jvh_error jvh_recv_chunk(jvh_response *response, char *return_buffer, int
         *bytes_read = 0;
         return JVH_ERR_OK;
     } else {
+        *bytes_read = 0;
         jvh_error err = jvh__translate_wsaerror(WSAGetLastError());
         closesocket(RESP_SOCKET(response));
         return err;

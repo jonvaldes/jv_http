@@ -30,8 +30,23 @@ would be done like this:
     jvh_stop(&jvhEnvironment);
 
 
-For a more complete example that checks the response body, there is a full 
-test case inside the library source file.
+A more complete example that checks the response body:
+
+    jvh_error err;
+    jvh_env jvhEnvironment;
+    jvh_init(&jvhEnvironment);
+    jvh_response Response;
+    jvh_simple_get(&jvhEnvironment, "hombrealto.com", "80", "/", &Response);
+    char response[RESPONSE_SIZE + 1];
+    int BytesRead;
+    jvh_recv_chunk(&Response, response, RESPONSE_SIZE, &BytesRead);
+    while(BytesRead != 0) {
+        response[BytesRead] = 0;
+        printf("%s", response);
+        jvh_recv_chunk(&Response, response, RESPONSE_SIZE, &BytesRead);
+    }
+    jvh_close(&Response);
+    jvh_stop(&jvhEnvironment);
 
 To build the test case, do:
 
