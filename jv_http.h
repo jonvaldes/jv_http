@@ -285,22 +285,6 @@ JVHDEF jvh_error jvh_stop(jvh_env *env) {
 
 #define RESP_SOCKET(resp) (*(SOCKET *)resp->_internal)
 
-static jvh_error jvh__receive(jvh_response *response, char *return_buffer, int buffer_size, int *bytes_read) {
-    int _bytes_read = recv(RESP_SOCKET(response), return_buffer, buffer_size, 0);
-    if(_bytes_read > 0) {
-        *bytes_read = _bytes_read;
-        return JVH_ERR_OK;
-    } else if(_bytes_read == 0) {
-        *bytes_read = 0;
-        return JVH_ERR_OK;
-    } else {
-        *bytes_read = 0;
-        jvh_error err = jvh__get_errno();
-        closesocket(RESP_SOCKET(response));
-        return err;
-    }
-}
-
 #else
 // ----------------------------
 //  BSD Sockets implementation
@@ -358,15 +342,6 @@ jvh_error jvh__get_errno() {
 }
 // clang-format on
 
-static jvh_error jvh__receive(jvh_response *response, char *return_buffer, int buffer_size, int *bytes_read) {
-    int msg_size = recv(RESP_SOCKET(response), return_buffer, buffer_size, 0);
-    if(msg_size == -1) {
-        return jvh__get_errno();
-    }
-    *bytes_read = msg_size;
-    return JVH_ERR_OK;
-}
-
 // Wrappers to match winsock API to BSD
 #define SOCKET_ERROR (-1)
 #define INVALID_SOCKET (-1)
@@ -422,6 +397,22 @@ static jvh_error jvh__connect(struct jvh_env *env, const char *server_name, cons
         return jvh__get_errno();
     }
     return JVH_ERR_OK;
+}
+
+static jvh_error jvh__receive(jvh_response *response, char *return_buffer, int buffer_size, int *bytes_read) {
+    int _bytes_read = recv(RESP_SOCKET(response), return_buffer, buffer_size, 0);
+    if(_bytes_read > 0) {
+        *bytes_read = _bytes_read;
+        return JVH_ERR_OK;
+    } else if(_bytes_read == 0) {
+        *bytes_read = 0;
+        return JVH_ERR_OK;
+    } else {
+        *bytes_read = 0;
+        jvh_error err = jvh__get_errno();
+        closesocket(RESP_SOCKET(response));
+        return err;
+    }
 }
 
 static jvh_error jvh__send(jvh_response *response, const char *data, int datalen) {
