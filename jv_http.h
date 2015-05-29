@@ -512,29 +512,48 @@ jvh_error jvh__get_errno() {
     }
 }
 
+// @TODO: Merge this function with the winsock one, as they're practically identical
 static jvh_error jvh__connect(struct jvh_env *env, const char *server_name, const char *port, jvh_response *response) {
-    // Try to resolve dns for server_name
     struct addrinfo hints = {};
-    struct addrinfo *res;
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    if(getaddrinfo(server_name, port, &hints, &res) != 0) {
-        return JVH_ERR_DNS_FAIL;
-    }
+    hints.ai_protocol = IPPROTO_TCP;
 
-    int sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if(sock < 0) {
+    struct addrinfo *server_addr;
+
+    // Resolve the server address and port
+    int addr_info_error = getaddrinfo(server_name, port, &hints, &server_addr);
+    if(addr_info_error != 0) {
         return jvh__get_errno();
     }
-    RESP_SOCKET(response) = sock;
+    memset(response, 0, sizeof(jvh_response));
 
-    // @TODO: try connecting to all available addresses before giving up
-    jvh_error result = JVH_ERR_OK;
-    if(connect(sock, res->ai_addr, res->ai_addrlen) < 0) {
-        result = jvh__get_errno();
+    RESP_SOCKET(response) = -1;
+
+    // Attempt to connect to an address until one succeeds
+    struct addrinfo *ptr;
+    for(ptr = server_addr; ptr; ptr = ptr->ai_next) {
+        // Create a SOCKET for connecting to server
+        RESP_SOCKET(response) = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
+        if(RESP_SOCKET(response) == -1) {
+            return jvh__get_errno();
+        }
+
+        // Connect to server.
+        if(connect(RESP_SOCKET(response), ptr->ai_addr, (int)ptr->ai_addrlen) == -1) {
+            close(RESP_SOCKET(response));
+            RESP_SOCKET(response) = -1;
+            continue;
+        }
+        break;
     }
-    freeaddrinfo(res);
-    return result;
+
+    freeaddrinfo(server_addr);
+
+    if(RESP_SOCKET(response) == -1) {
+        return jvh__get_errno();
+    }
+    return JVH_ERR_OK;
 }
 
 static jvh_error jvh__send(jvh_response *response, const char *data, int datalen) {
@@ -545,9 +564,11 @@ static jvh_error jvh__send(jvh_response *response, const char *data, int datalen
 }
 
 static jvh_error jvh__receive(jvh_response *response, char *return_buffer, int buffer_size, int *bytes_read) {
-    if(recv(RESP_SOCKET(response), return_buffer, buffer_size, 0) < 0) {
+    int msg_size = recv(RESP_SOCKET(response), return_buffer, buffer_size, 0);
+    if(msg_size == -1) {
         return jvh__get_errno();
     }
+    *bytes_read = msg_size;
     return JVH_ERR_OK;
 }
 
@@ -579,7 +600,7 @@ static int jvh__str_find_first(const char *s, char c, int max_len) {
 static jvh_error jvh__parse_headers(jvh_response *response) {
     int bytes_read;
     int errcode;
-    if((errcode = jvh_recv_chunk(response, response->_buffer, JV_HTTP_RESPONSE_BUFFER_LEN, &bytes_read)) != 0) {
+    if((errcode = jvh__receive(response, response->_buffer, JV_HTTP_RESPONSE_BUFFER_LEN, &bytes_read)) != 0) {
         return errcode;
     }
     if(bytes_read == 0) {
@@ -640,7 +661,7 @@ tearDown:
 
 JVHDEF jvh_error jvh_recv_chunk(jvh_response *response, char *return_buffer, int buffer_size, int *bytes_read) {
     // First check if we have something buffered in the response
-    if(response->_buffer_offset != 0 && response->_buffer_offset < response->_bytes_in_buffer) {
+    if(response->_buffer_offset < response->_bytes_in_buffer) {
         int left_in_buffer = response->_bytes_in_buffer - response->_buffer_offset;
         int bytes_to_copy = left_in_buffer;
         if(bytes_to_copy > buffer_size) {
