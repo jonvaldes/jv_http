@@ -126,7 +126,7 @@ typedef struct {
     char _buffer[JV_HTTP_RESPONSE_BUFFER_LEN];
     int _bytes_in_buffer;
     int _buffer_offset;
-    char _internal[4]; // Enough bytes to hold internal platform-dependent data
+    char _internal[8]; // Enough bytes to hold internal platform-dependent data
 } jvh_response;
 
 JVHDEF jvh_error jvh_init(struct jvh_env *env);
