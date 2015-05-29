@@ -295,7 +295,7 @@ JVHDEF jvh_error jvh_stop(jvh_env *env) {
 
 #define RESP_SOCKET(resp) (*(SOCKET *)resp->_internal)
 
-static int jvh__connect(struct jvh_env *env, const char *server_name, const char *port, jvh_response *response) {
+static jvh_error jvh__connect(struct jvh_env *env, const char *server_name, const char *port, jvh_response *response) {
     struct addrinfo hints;
     ZeroMemory(&hints, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
@@ -512,27 +512,29 @@ jvh_error jvh__get_errno() {
     }
 }
 
-static int jvh__connect(struct jvh_env *env, const char *server_name, const char *port, jvh_response *response) {
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
+static jvh_error jvh__connect(struct jvh_env *env, const char *server_name, const char *port, jvh_response *response) {
+    // Try to resolve dns for server_name
+    struct addrinfo hints = {};
+    struct addrinfo *res;
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    if(getaddrinfo(server_name, port, &hints, &res) != 0) {
+        return JVH_ERR_DNS_FAIL;
+    }
+
+    int sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     if(sock < 0) {
         return jvh__get_errno();
     }
     RESP_SOCKET(response) = sock;
-    // Try to resolve dns for server_name
-    struct hostent *he = gethostbyname(server_name);
-    if(he == NULL) {
-        return JVH_ERR_DNS_FAIL;
-    }
 
     // @TODO: try connecting to all available addresses before giving up
-    struct sockaddr_in addr;
-    addr.sin_addr.s_addr = inet_addr(he->h_addr_list[0]);
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(atoi(port));
-    if(connect(RESP_SOCKET(response), (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        return jvh__get_errno();
+    jvh_error result = JVH_ERR_OK;
+    if(connect(sock, res->ai_addr, res->ai_addrlen) < 0) {
+        result = jvh__get_errno();
     }
-    return JVH_ERR_OK;
+    freeaddrinfo(res);
+    return result;
 }
 
 static jvh_error jvh__send(jvh_response *response, const char *data, int datalen) {
