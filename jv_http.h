@@ -191,22 +191,22 @@ JV_HTTP_STATIC_ASSERT(sizeof(SOCKET) <= sizeof(((jvh_response *)0)->_internal), 
 
 int main(int argc, wchar_t *argv[]) {
     jvh_error err;
-    jvh_env jvhEnvironment;
-    CHECK(jvh_init(&jvhEnvironment));
-    jvh_response Response;
-    CHECK(jvh_simple_get(&jvhEnvironment, "hombrealto.com", "80", "/", &Response));
-    printf("Response code: %d\n", Response.status_code);
+    jvh_env env;
+    CHECK(jvh_init(&env));
+    jvh_response r;
+    CHECK(jvh_simple_get(&env, "hombrealto.com", "80", "/", &r));
+    printf("Response code: %d\n", r.status_code);
     printf("Response contents:\n");
-    char response[RESPONSE_SIZE + 1];
-    int BytesRead;
-    CHECK(jvh_recv_chunk(&Response, response, RESPONSE_SIZE, &BytesRead));
-    while(BytesRead != 0) {
-        response[BytesRead] = 0;
-        printf("%s", response);
-        CHECK(jvh_recv_chunk(&Response, response, RESPONSE_SIZE, &BytesRead));
+    char buf[RESPONSE_SIZE + 1];
+    int bytes_read;
+    CHECK(jvh_recv_chunk(&r, buf, RESPONSE_SIZE, &bytes_read));
+    while(bytes_read != 0) {
+        buf[bytes_read] = 0;
+        printf("%s", buf);
+        CHECK(jvh_recv_chunk(&r, buf, RESPONSE_SIZE, &bytes_read));
     }
-    CHECK(jvh_close(&Response));
-    CHECK(jvh_stop(&jvhEnvironment));
+    CHECK(jvh_close(&r));
+    CHECK(jvh_stop(&env));
 
 #undef CHECK
     return 0;

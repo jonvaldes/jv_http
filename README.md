@@ -18,35 +18,36 @@ Example use
 Without error checking, a simple ping request (for analytics, for example) 
 would be done like this:
 
-    jvh_env jvhEnvironment;
-    jvh_init(&jvhEnvironment);
+    jvh_env env;
+    jvh_init(&env);
 
-    jvh_response Response;
-    jvh_simple_get(&jvhEnvironment, "mywebsite.com", "80", "/analytics?ID=11111", &Response));
-	if(Response.status_code != 200){
+    jvh_response r;
+    jvh_simple_get(&env, "mywebsite.com", "80", "/analytics?ID=11111", &r));
+	if(r.status_code != 200){
 		// Something went wrong!
 	}
-    jvh_close(&Response);
-    jvh_stop(&jvhEnvironment);
+    jvh_close(&r);
+    jvh_stop(&env);
 
 
 A more complete example that checks the response body:
 
+    #define RESPONSE_SIZE 2048
     jvh_error err;
-    jvh_env jvhEnvironment;
-    jvh_init(&jvhEnvironment);
-    jvh_response Response;
-    jvh_simple_get(&jvhEnvironment, "hombrealto.com", "80", "/", &Response);
-    char response[RESPONSE_SIZE + 1];
-    int BytesRead;
-    jvh_recv_chunk(&Response, response, RESPONSE_SIZE, &BytesRead);
-    while(BytesRead != 0) {
-        response[BytesRead] = 0;
-        printf("%s", response);
-        jvh_recv_chunk(&Response, response, RESPONSE_SIZE, &BytesRead);
+    jvh_env env;
+    jvh_init(&env);
+    jvh_response r;
+    jvh_simple_get(&env, "hombrealto.com", "80", "/", &r);
+    char buf[RESPONSE_SIZE + 1];
+    int bytes_read;
+    jvh_recv_chunk(&r, buf, RESPONSE_SIZE, &bytes_read);
+    while(bytes_read != 0) {
+        buf[bytes_read] = 0;
+        printf("%s", buf);
+        jvh_recv_chunk(&r, buf, RESPONSE_SIZE, &bytes_read);
     }
-    jvh_close(&Response);
-    jvh_stop(&jvhEnvironment);
+    jvh_close(&r);
+    jvh_stop(&env);
 
 To build the test case, do:
 
