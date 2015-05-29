@@ -80,6 +80,7 @@ Acknowledgements:
 // ----------------------------------------------
 
 #include <string.h>
+#include <stdarg.h>
 
 #ifdef _MSC_VER
 
@@ -108,6 +109,7 @@ typedef enum {
     JVH_ERR_CONN_ABORTED,
     JVH_ERR_CONN_RESET,
 
+    JVH_ERR_DNS_FAIL,
     JVH_ERR_HOST_UNREACHABLE,
     JVH_ERR_NET_UNREACHABLE,
     JVH_ERR_NET_DOWN,
@@ -166,11 +168,10 @@ JV_HTTP_STATIC_ASSERT(sizeof(SOCKET) <= sizeof(((jvh_response *)0)->_internal), 
 #else // JV_PLATFORM_WINSOCK
 // ---------------------
 //  BSD Sockets structs
-//
 
-// @TODO
+typedef struct jvh_env {
+} jvh_env;
 
-//
 // ---------------------
 
 #endif // !JV_PLATFORM_WINSOCK
@@ -181,6 +182,8 @@ JV_HTTP_STATIC_ASSERT(sizeof(SOCKET) <= sizeof(((jvh_response *)0)->_internal), 
 
 #ifdef JV_HTTP_TEST
 
+#include <stdio.h>
+#include <stdlib.h>
 #define CHECK(x)                                              \
     if((err = x) != JVH_ERR_OK) {                             \
         printf("ERROR: code %d at line %d\n", err, __LINE__); \
@@ -189,7 +192,7 @@ JV_HTTP_STATIC_ASSERT(sizeof(SOCKET) <= sizeof(((jvh_response *)0)->_internal), 
 
 #define RESPONSE_SIZE 2048
 
-int main(int argc, wchar_t *argv[]) {
+int main(int argc, char *argv[]) {
     jvh_error err;
     jvh_env env;
     CHECK(jvh_init(&env));
@@ -252,7 +255,7 @@ jvh_error jvh__translate_wsaerror(int err) {
         case WSAEPROCLIM:           // v
         case WSAEMFILE:             return JVH_ERR_TOO_MANY_CONNS;
 
-        // @TODO: Keep assigning jvh_error_codes to these errors
+        // @TODO: Keep assigning jvh_error codes to these errors
         case WSAEADDRINUSE:
         case WSAEADDRNOTAVAIL:
         case WSAEALREADY:
@@ -373,7 +376,186 @@ JVHDEF jvh_error jvh_close(jvh_response *response) {
 //  BSD Sockets implementation
 // ----------------------------
 
-// @TODO: do all this!
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <errno.h>
+#include <netdb.h>
+
+JVHDEF jvh_error jvh_init(jvh_env *env) { return JVH_ERR_OK; }
+JVHDEF jvh_error jvh_stop(jvh_env *env) { return JVH_ERR_OK; }
+
+#define RESP_SOCKET(resp) (*(int *)resp->_internal)
+
+jvh_error jvh__get_errno() {
+    switch(errno) {
+    // @TODO: assign jvh_error codes to all these!
+    case E2BIG:
+    case EACCES:
+    case EADDRINUSE:
+    case EADDRNOTAVAIL:
+    case EAFNOSUPPORT:
+    case EALREADY:
+    case EBADE:
+    case EBADF:
+    case EBADFD:
+    case EBADMSG:
+    case EBADR:
+    case EBADRQC:
+    case EBADSLT:
+    case EBUSY:
+    case ECANCELED:
+    case ECHILD:
+    case ECHRNG:
+    case ECOMM:
+    case ECONNABORTED:
+    case ECONNREFUSED:
+    case ECONNRESET:
+    case EDEADLOCK:
+    case EDESTADDRREQ:
+    case EDOM:
+    case EDQUOT:
+    case EEXIST:
+    case EFAULT:
+    case EFBIG:
+    case EHOSTDOWN:
+    case EHOSTUNREACH:
+    case EIDRM:
+    case EILSEQ:
+    case EINPROGRESS:
+    case EINTR:
+    case EINVAL:
+    case EIO:
+    case EISCONN:
+    case EISDIR:
+    case EISNAM:
+    case EKEYEXPIRED:
+    case EKEYREJECTED:
+    case EKEYREVOKED:
+    case EL2HLT:
+    case EL2NSYNC:
+    case EL3HLT:
+    case EL3RST:
+    case ELIBACC:
+    case ELIBBAD:
+    case ELIBMAX:
+    case ELIBSCN:
+    case ELIBEXEC:
+    case ELOOP:
+    case EMEDIUMTYPE:
+    case EMFILE:
+    case EMLINK:
+    case EMSGSIZE:
+    case EMULTIHOP:
+    case ENAMETOOLONG:
+    case ENETDOWN:
+    case ENETRESET:
+    case ENETUNREACH:
+    case ENFILE:
+    case ENOBUFS:
+    case ENODATA:
+    case ENODEV:
+    case ENOENT:
+    case ENOEXEC:
+    case ENOKEY:
+    case ENOLCK:
+    case ENOLINK:
+    case ENOMEDIUM:
+    case ENOMEM:
+    case ENOMSG:
+    case ENONET:
+    case ENOPKG:
+    case ENOPROTOOPT:
+    case ENOSPC:
+    case ENOSR:
+    case ENOSTR:
+    case ENOSYS:
+    case ENOTBLK:
+    case ENOTCONN:
+    case ENOTDIR:
+    case ENOTEMPTY:
+    case ENOTSOCK:
+    case ENOTTY:
+    case ENOTUNIQ:
+    case ENXIO:
+    case EOPNOTSUPP:
+    case EOVERFLOW:
+    case EPERM:
+    case EPFNOSUPPORT:
+    case EPIPE:
+    case EPROTO:
+    case EPROTONOSUPPORT:
+    case EPROTOTYPE:
+    case ERANGE:
+    case EREMCHG:
+    case EREMOTE:
+    case EREMOTEIO:
+    case ERESTART:
+    case EROFS:
+    case ESHUTDOWN:
+    case ESPIPE:
+    case ESOCKTNOSUPPORT:
+    case ESRCH:
+    case ESTALE:
+    case ESTRPIPE:
+    case ETIME:
+    case ETIMEDOUT:
+    case ETXTBSY:
+    case EUCLEAN:
+    case EUNATCH:
+    case EUSERS:
+    case EWOULDBLOCK:
+    case EXDEV:
+    case EXFULL:
+    default:
+        return JVH_ERR_UNKNOWN;
+    }
+}
+
+static int jvh__connect(struct jvh_env *env, const char *server_name, const char *port, jvh_response *response) {
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if(sock < 0) {
+        return jvh__get_errno();
+    }
+    RESP_SOCKET(response) = sock;
+    // Try to resolve dns for server_name
+    struct hostent *he = gethostbyname(server_name);
+    if(he == NULL) {
+        return JVH_ERR_DNS_FAIL;
+    }
+
+    // @TODO: try connecting to all available addresses before giving up
+    struct sockaddr_in addr;
+    addr.sin_addr.s_addr = inet_addr(he->h_addr_list[0]);
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(atoi(port));
+    if(connect(RESP_SOCKET(response), (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        return jvh__get_errno();
+    }
+    return JVH_ERR_OK;
+}
+
+static jvh_error jvh__send(jvh_response *response, const char *data, int datalen) {
+    if(send(RESP_SOCKET(response), data, datalen, 0) < 0) {
+        return jvh__get_errno();
+    }
+    return JVH_ERR_OK;
+}
+
+static jvh_error jvh__receive(jvh_response *response, char *return_buffer, int buffer_size, int *bytes_read) {
+    if(recv(RESP_SOCKET(response), return_buffer, buffer_size, 0) < 0) {
+        return jvh__get_errno();
+    }
+    return JVH_ERR_OK;
+}
+
+JVHDEF jvh_error jvh_close(jvh_response *response) {
+    if(close(RESP_SOCKET(response)) < 0) {
+        return jvh__get_errno();
+    }
+    return JVH_ERR_OK;
+}
+
 #endif // !JV_PLATFORM_WINSOCK
 
 // ----------------------------
@@ -382,7 +564,8 @@ JVHDEF jvh_error jvh_close(jvh_response *response) {
 
 static int jvh__str_find_first(const char *s, char c, int max_len) {
     int result = -1;
-    for(int i = 0; *s && i < max_len; s++, i++) {
+    int i;
+    for(i = 0; *s && i < max_len; s++, i++) {
         if(*s == c) {
             result = i;
             break;
@@ -395,7 +578,7 @@ static jvh_error jvh__parse_headers(jvh_response *response) {
     int bytes_read;
     int errcode;
     if((errcode = jvh_recv_chunk(response, response->_buffer, JV_HTTP_RESPONSE_BUFFER_LEN, &bytes_read)) != 0) {
-        return jvh__translate_wsaerror(errcode);
+        return errcode;
     }
     if(bytes_read == 0) {
         return JVH_ERR_INVALID_RESPONSE; // server didn't return anything
