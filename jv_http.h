@@ -37,7 +37,7 @@ Usage:
 
 License:
    This software is in the public domain. Where that dedication is not
-   recognized, you are granted a perpetual, irrevocable license to copy
+   recognized, you are granted a perpetual, irrevocable license to use, copy
    and modify this file however you want.
 
 Acknowledgements:
@@ -83,7 +83,6 @@ Acknowledgements:
 #include <stdarg.h>
 
 #ifdef _MSC_VER
-
 #define JV_PLATFORM_WINSOCK
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -91,34 +90,27 @@ Acknowledgements:
 #pragma comment(lib, "Mswsock")
 
 #else // !_MSC_VER
-
 #define JV_PLATFORM_BSDSOCK
-
 #endif
 
 struct jvh_env;
 typedef enum {
     JVH_ERR_OK = 0,
-    JVH_ERR_UNSUPPORTED,
-    JVH_ERR_OUT_OF_MEMORY,
-    JVH_ERR_PERMISSION_DENIED,
-
-    JVH_ERR_INVALID_RESPONSE,
-
-    JVH_ERR_CONN_REFUSED,
+    JVH_ERR_BAD_MEM_ADDRESS,
     JVH_ERR_CONN_ABORTED,
+    JVH_ERR_CONN_REFUSED,
     JVH_ERR_CONN_RESET,
-
     JVH_ERR_DNS_FAIL,
     JVH_ERR_HOST_UNREACHABLE,
-    JVH_ERR_NET_UNREACHABLE,
-    JVH_ERR_NET_DOWN,
-    JVH_ERR_TIMEOUT,
-
-    JVH_ERR_BAD_MEM_ADDRESS,
     JVH_ERR_INVALID_ARGUMENT,
-
+    JVH_ERR_INVALID_RESPONSE,
+    JVH_ERR_NET_DOWN,
+    JVH_ERR_NET_UNREACHABLE,
+    JVH_ERR_OUT_OF_MEMORY,
+    JVH_ERR_PERMISSION_DENIED,
+    JVH_ERR_TIMEOUT,
     JVH_ERR_TOO_MANY_CONNS,
+    JVH_ERR_UNSUPPORTED,
 
     JVH_ERR_UNKNOWN = 5000,
 } jvh_error;
@@ -128,7 +120,7 @@ typedef struct {
     char _buffer[JV_HTTP_RESPONSE_BUFFER_LEN];
     int _bytes_in_buffer;
     int _buffer_offset;
-    char _internal[8]; // Enough bytes to hold internal platform-dependent data
+    char _internal[8]; // Enough bytes to hold the platform-dependent socket descriptor
 } jvh_response;
 
 JVHDEF jvh_error jvh_init(struct jvh_env *env);
@@ -151,35 +143,14 @@ JVHDEF jvh_error jvh_simple_get(struct jvh_env *env, const char *server_name, co
 JVHDEF jvh_error jvh_recv_chunk(jvh_response *response, char *return_buffer, int buffer_size, int *bytes_read);
 JVHDEF jvh_error jvh_close(jvh_response *response);
 
+typedef struct jvh_env {
 #ifdef JV_PLATFORM_WINSOCK
-// -----------------
-//  Windows structs
-//
-typedef struct jvh_env {
     WSADATA wsa;
+#endif
 } jvh_env;
-
-#define JV_HTTP_STATIC_ASSERT(COND, MSG) typedef char static_assertion_##MSG[(COND) ? 1 : -1]
-
-JV_HTTP_STATIC_ASSERT(sizeof(SOCKET) <= sizeof(((jvh_response *)0)->_internal), jvh_response_internal_field_must_be_big_enough_for_SOCKET);
-//
-// -----------------
-
-#else // JV_PLATFORM_WINSOCK
-
-// ---------------------
-//  BSD Sockets structs
-
-typedef struct jvh_env {
-} jvh_env;
-
-// ---------------------
-
-#endif // !JV_PLATFORM_WINSOCK
 
 // ===========================================================================
 //  Example program:
-// ===========================================================================
 
 #ifdef JV_HTTP_TEST
 
@@ -221,14 +192,14 @@ int main(int argc, char *argv[]) {
 #endif // JV_HTTP_TEST
 
 // ===========================================================================
-// ===========================================================================
 
 #ifdef JV_HTTP_IMPLEMENTATION
 
-#ifdef JV_PLATFORM_WINSOCK
-// -----------------
-//  Windows implementation
-// -----------------
+// ----------------------------------------------------------------------------
+#ifdef JV_PLATFORM_WINSOCK //  Windows implementation
+
+#define JV_HTTP_STATIC_ASSERT(COND, MSG) typedef char static_assertion_##MSG[(COND) ? 1 : -1]
+JV_HTTP_STATIC_ASSERT(sizeof(SOCKET) <= sizeof(((jvh_response *)0)->_internal), jvh_response_internal_field_must_be_big_enough_for_SOCKET);
 
 jvh_error jvh__translate_wsaerror(int err) {
     // clang-format off
@@ -285,10 +256,8 @@ JVHDEF jvh_error jvh_stop(jvh_env *env) {
 
 #define RESP_SOCKET(resp) (*(SOCKET *)resp->_internal)
 
-#else
-// ----------------------------
-//  BSD Sockets implementation
-// ----------------------------
+// ----------------------------------------------------------------------------
+#else //     BSD Sockets implementation
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -352,9 +321,8 @@ int closesocket(int socket) {
 
 #endif // !JV_PLATFORM_WINSOCK
 
-// ----------------------------
+// ----------------------------------------------------------------------------
 // Multiplatform code
-// ----------------------------
 
 static jvh_error jvh__connect(struct jvh_env *env, const char *server_name, const char *port, jvh_response *response) {
     struct addrinfo hints;
