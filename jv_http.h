@@ -166,6 +166,7 @@ JV_HTTP_STATIC_ASSERT(sizeof(SOCKET) <= sizeof(((jvh_response *)0)->_internal), 
 // -----------------
 
 #else // JV_PLATFORM_WINSOCK
+
 // ---------------------
 //  BSD Sockets structs
 
@@ -269,14 +270,17 @@ jvh_error jvh__translate_wsaerror(int err) {
     // clang-format on
 }
 
+jvh_error jvh__get_errno() {
+    return jvh__translate_wsaerror(WSAGetLastError());
+}
+
 JVHDEF jvh_error jvh_init(jvh_env *env) {
     int errcode = WSAStartup(MAKEWORD(2, 2), &env->wsa);
     return jvh__translate_wsaerror(errcode);
 }
 
 JVHDEF jvh_error jvh_stop(jvh_env *env) {
-    int errcode = WSACleanup();
-    return jvh__translate_wsaerror(errcode);
+    return jvh__translate_wsaerror(WSACleanup());
 }
 
 #define RESP_SOCKET(resp) (*(SOCKET *)resp->_internal)
@@ -304,7 +308,7 @@ static jvh_error jvh__connect(struct jvh_env *env, const char *server_name, cons
         // Create a SOCKET for connecting to server
         RESP_SOCKET(response) = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
         if(RESP_SOCKET(response) == INVALID_SOCKET) {
-            return jvh__translate_wsaerror(WSAGetLastError());
+            return jvh__get_errno();
         }
 
         // Connect to server.
@@ -319,18 +323,9 @@ static jvh_error jvh__connect(struct jvh_env *env, const char *server_name, cons
     freeaddrinfo(server_addr);
 
     if(RESP_SOCKET(response) == INVALID_SOCKET) {
-        return jvh__translate_wsaerror(WSAGetLastError());
+        return jvh__get_errno();
     }
 
-    return JVH_ERR_OK;
-}
-
-static jvh_error jvh__send(jvh_response *response, const char *data, int datalen) {
-    if(send(RESP_SOCKET(response), data, datalen, 0) == SOCKET_ERROR) {
-        jvh_error err = jvh__translate_wsaerror(WSAGetLastError());
-        closesocket(RESP_SOCKET(response));
-        return err;
-    }
     return JVH_ERR_OK;
 }
 
@@ -344,17 +339,10 @@ static jvh_error jvh__receive(jvh_response *response, char *return_buffer, int b
         return JVH_ERR_OK;
     } else {
         *bytes_read = 0;
-        jvh_error err = jvh__translate_wsaerror(WSAGetLastError());
+        jvh_error err = jvh__get_errno();
         closesocket(RESP_SOCKET(response));
         return err;
     }
-}
-
-JVHDEF jvh_error jvh_close(jvh_response *response) {
-    if(closesocket(RESP_SOCKET(response)) == SOCKET_ERROR) {
-        return jvh__translate_wsaerror(WSAGetLastError());
-    }
-    return JVH_ERR_OK;
 }
 
 #else
@@ -458,13 +446,6 @@ static jvh_error jvh__connect(struct jvh_env *env, const char *server_name, cons
     return JVH_ERR_OK;
 }
 
-static jvh_error jvh__send(jvh_response *response, const char *data, int datalen) {
-    if(send(RESP_SOCKET(response), data, datalen, 0) < 0) {
-        return jvh__get_errno();
-    }
-    return JVH_ERR_OK;
-}
-
 static jvh_error jvh__receive(jvh_response *response, char *return_buffer, int buffer_size, int *bytes_read) {
     int msg_size = recv(RESP_SOCKET(response), return_buffer, buffer_size, 0);
     if(msg_size == -1) {
@@ -474,11 +455,11 @@ static jvh_error jvh__receive(jvh_response *response, char *return_buffer, int b
     return JVH_ERR_OK;
 }
 
-JVHDEF jvh_error jvh_close(jvh_response *response) {
-    if(close(RESP_SOCKET(response)) < 0) {
-        return jvh__get_errno();
-    }
-    return JVH_ERR_OK;
+// Wrappers to match winsock API to BSD
+#define SOCKET_ERROR (-1)
+
+int closesocket(int socket) {
+    return close(socket);
 }
 
 #endif // !JV_PLATFORM_WINSOCK
@@ -486,6 +467,22 @@ JVHDEF jvh_error jvh_close(jvh_response *response) {
 // ----------------------------
 // Multiplatform code
 // ----------------------------
+
+static jvh_error jvh__send(jvh_response *response, const char *data, int datalen) {
+    if(send(RESP_SOCKET(response), data, datalen, 0) == SOCKET_ERROR) {
+        jvh_error err = jvh__get_errno();
+        closesocket(RESP_SOCKET(response));
+        return err;
+    }
+    return JVH_ERR_OK;
+}
+
+JVHDEF jvh_error jvh_close(jvh_response *response) {
+    if(closesocket(RESP_SOCKET(response)) == SOCKET_ERROR) {
+        return jvh__get_errno();
+    }
+    return JVH_ERR_OK;
+}
 
 static int jvh__str_find_first(const char *s, char c, int max_len) {
     int result = -1;
