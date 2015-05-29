@@ -285,50 +285,6 @@ JVHDEF jvh_error jvh_stop(jvh_env *env) {
 
 #define RESP_SOCKET(resp) (*(SOCKET *)resp->_internal)
 
-static jvh_error jvh__connect(struct jvh_env *env, const char *server_name, const char *port, jvh_response *response) {
-    struct addrinfo hints;
-    ZeroMemory(&hints, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-
-    struct addrinfo *server_addr;
-
-    // Resolve the server address and port
-    int addr_info_error = getaddrinfo(server_name, port, &hints, &server_addr);
-    if(addr_info_error != 0) {
-        return jvh__translate_wsaerror(addr_info_error);
-    }
-    memset(response, 0, sizeof(jvh_response));
-
-    RESP_SOCKET(response) = INVALID_SOCKET;
-
-    // Attempt to connect to an address until one succeeds
-    for(struct addrinfo *ptr = server_addr; ptr; ptr = ptr->ai_next) {
-        // Create a SOCKET for connecting to server
-        RESP_SOCKET(response) = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
-        if(RESP_SOCKET(response) == INVALID_SOCKET) {
-            return jvh__get_errno();
-        }
-
-        // Connect to server.
-        if(connect(RESP_SOCKET(response), ptr->ai_addr, (int)ptr->ai_addrlen) == SOCKET_ERROR) {
-            closesocket(RESP_SOCKET(response));
-            RESP_SOCKET(response) = INVALID_SOCKET;
-            continue;
-        }
-        break;
-    }
-
-    freeaddrinfo(server_addr);
-
-    if(RESP_SOCKET(response) == INVALID_SOCKET) {
-        return jvh__get_errno();
-    }
-
-    return JVH_ERR_OK;
-}
-
 static jvh_error jvh__receive(jvh_response *response, char *return_buffer, int buffer_size, int *bytes_read) {
     int _bytes_read = recv(RESP_SOCKET(response), return_buffer, buffer_size, 0);
     if(_bytes_read > 0) {
@@ -402,50 +358,6 @@ jvh_error jvh__get_errno() {
 }
 // clang-format on
 
-// @TODO: Merge this function with the winsock one, as they're practically identical
-static jvh_error jvh__connect(struct jvh_env *env, const char *server_name, const char *port, jvh_response *response) {
-    struct addrinfo hints = {};
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-
-    struct addrinfo *server_addr;
-
-    // Resolve the server address and port
-    int addr_info_error = getaddrinfo(server_name, port, &hints, &server_addr);
-    if(addr_info_error != 0) {
-        return jvh__get_errno();
-    }
-    memset(response, 0, sizeof(jvh_response));
-
-    RESP_SOCKET(response) = -1;
-
-    // Attempt to connect to an address until one succeeds
-    struct addrinfo *ptr;
-    for(ptr = server_addr; ptr; ptr = ptr->ai_next) {
-        // Create a SOCKET for connecting to server
-        RESP_SOCKET(response) = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
-        if(RESP_SOCKET(response) == -1) {
-            return jvh__get_errno();
-        }
-
-        // Connect to server.
-        if(connect(RESP_SOCKET(response), ptr->ai_addr, (int)ptr->ai_addrlen) == -1) {
-            close(RESP_SOCKET(response));
-            RESP_SOCKET(response) = -1;
-            continue;
-        }
-        break;
-    }
-
-    freeaddrinfo(server_addr);
-
-    if(RESP_SOCKET(response) == -1) {
-        return jvh__get_errno();
-    }
-    return JVH_ERR_OK;
-}
-
 static jvh_error jvh__receive(jvh_response *response, char *return_buffer, int buffer_size, int *bytes_read) {
     int msg_size = recv(RESP_SOCKET(response), return_buffer, buffer_size, 0);
     if(msg_size == -1) {
@@ -457,6 +369,7 @@ static jvh_error jvh__receive(jvh_response *response, char *return_buffer, int b
 
 // Wrappers to match winsock API to BSD
 #define SOCKET_ERROR (-1)
+#define INVALID_SOCKET (-1)
 
 int closesocket(int socket) {
     return close(socket);
@@ -467,6 +380,49 @@ int closesocket(int socket) {
 // ----------------------------
 // Multiplatform code
 // ----------------------------
+
+static jvh_error jvh__connect(struct jvh_env *env, const char *server_name, const char *port, jvh_response *response) {
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
+    struct addrinfo *server_addr;
+
+    // Resolve the server address and port
+    int addr_info_error = getaddrinfo(server_name, port, &hints, &server_addr);
+    if(addr_info_error != 0) {
+        return JVH_ERR_DNS_FAIL;
+    }
+    memset(response, 0, sizeof(jvh_response));
+
+    RESP_SOCKET(response) = INVALID_SOCKET;
+
+    // Attempt to connect to an address until one succeeds
+    struct addrinfo *ptr;
+    for(ptr = server_addr; ptr; ptr = ptr->ai_next) {
+        // Create a SOCKET for connecting to server
+        RESP_SOCKET(response) = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
+        if(RESP_SOCKET(response) == INVALID_SOCKET) {
+            return jvh__get_errno();
+        }
+
+        // Connect to server.
+        if(connect(RESP_SOCKET(response), ptr->ai_addr, (int)ptr->ai_addrlen) == SOCKET_ERROR) {
+            closesocket(RESP_SOCKET(response));
+            RESP_SOCKET(response) = INVALID_SOCKET;
+            continue;
+        }
+        break;
+    }
+    freeaddrinfo(server_addr);
+
+    if(RESP_SOCKET(response) == INVALID_SOCKET) {
+        return jvh__get_errno();
+    }
+    return JVH_ERR_OK;
+}
 
 static jvh_error jvh__send(jvh_response *response, const char *data, int datalen) {
     if(send(RESP_SOCKET(response), data, datalen, 0) == SOCKET_ERROR) {
