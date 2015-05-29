@@ -237,11 +237,11 @@ jvh_error jvh__translate_wsaerror(int err) {
         case WSAEHOSTUNREACH:       return JVH_ERR_HOST_UNREACHABLE;
         case WSAENETUNREACH:        return JVH_ERR_NET_UNREACHABLE;
         case WSA_NOT_ENOUGH_MEMORY: return JVH_ERR_OUT_OF_MEMORY;
-        case WSAEAFNOSUPPORT:       // v
-        case WSAEOPNOTSUPP:         // v
-        case WSAEPROTONOSUPPORT:    // v
-        case WSAESOCKTNOSUPPORT:    // v
-        case WSAVERNOTSUPPORTED:    return JVH_ERR_UNSUPPORTED;
+
+        case WSAEAFNOSUPPORT:    case WSAEOPNOTSUPP:      case WSAEPROTONOSUPPORT: 
+        case WSAESOCKTNOSUPPORT: case WSAVERNOTSUPPORTED:    
+            return JVH_ERR_UNSUPPORTED;
+
         case WSAETIMEDOUT:          return JVH_ERR_TIMEOUT;
         case WSAECONNABORTED:       return JVH_ERR_CONN_ABORTED;
         case WSAECONNREFUSED:       return JVH_ERR_CONN_REFUSED;
@@ -256,25 +256,11 @@ jvh_error jvh__translate_wsaerror(int err) {
         case WSAEMFILE:             return JVH_ERR_TOO_MANY_CONNS;
 
         // @TODO: Keep assigning jvh_error codes to these errors
-        case WSAEADDRINUSE:
-        case WSAEADDRNOTAVAIL:
-        case WSAEALREADY:
-        case WSAEINPROGRESS:
-        case WSAEINTR:
-        case WSAEISCONN:
-        case WSAEMSGSIZE:
-        case WSAENOBUFS:
-        case WSAENOTCONN:
-        case WSAENOTSOCK:
-        case WSAEPROVIDERFAILEDINIT:
-        case WSAESHUTDOWN:
-        case WSAEWOULDBLOCK:
-        case WSAHOST_NOT_FOUND:
-        case WSANOTINITIALISED:
-        case WSANO_RECOVERY:
-        case WSASYSNOTREADY:
-        case WSATRY_AGAIN:
-        case WSATYPE_NOT_FOUND:
+        case WSAEADDRINUSE:    case WSAEADDRNOTAVAIL:     case WSAEALREADY:            case WSAEINPROGRESS:
+        case WSAEINTR:         case WSAEISCONN:           case WSAEMSGSIZE:            case WSAENOBUFS:
+        case WSAENOTCONN:      case WSAENOTSOCK:          case WSAEPROVIDERFAILEDINIT: case WSAESHUTDOWN:
+        case WSAEWOULDBLOCK:   case WSAHOST_NOT_FOUND:    case WSANOTINITIALISED:      case WSANO_RECOVERY:
+        case WSASYSNOTREADY:   case WSATRY_AGAIN:         case WSATYPE_NOT_FOUND:
 
         //
         case WSAEINVALIDPROVIDER:   // v
@@ -387,130 +373,46 @@ JVHDEF jvh_error jvh_stop(jvh_env *env) { return JVH_ERR_OK; }
 
 #define RESP_SOCKET(resp) (*(int *)resp->_internal)
 
+// clang-format off
 jvh_error jvh__get_errno() {
     switch(errno) {
     // @TODO: assign jvh_error codes to all these!
-    case E2BIG:
-    case EACCES:
-    case EADDRINUSE:
-    case EADDRNOTAVAIL:
-    case EAFNOSUPPORT:
-    case EALREADY:
-    case EBADE:
-    case EBADF:
-    case EBADFD:
-    case EBADMSG:
-    case EBADR:
-    case EBADRQC:
-    case EBADSLT:
-    case EBUSY:
-    case ECANCELED:
-    case ECHILD:
-    case ECHRNG:
-    case ECOMM:
-    case ECONNABORTED:
-    case ECONNREFUSED:
-    case ECONNRESET:
-    case EDEADLOCK:
-    case EDESTADDRREQ:
-    case EDOM:
-    case EDQUOT:
-    case EEXIST:
-    case EFAULT:
-    case EFBIG:
-    case EHOSTDOWN:
-    case EHOSTUNREACH:
-    case EIDRM:
-    case EILSEQ:
-    case EINPROGRESS:
-    case EINTR:
-    case EINVAL:
-    case EIO:
-    case EISCONN:
-    case EISDIR:
-    case EISNAM:
-    case EKEYEXPIRED:
-    case EKEYREJECTED:
-    case EKEYREVOKED:
-    case EL2HLT:
-    case EL2NSYNC:
-    case EL3HLT:
-    case EL3RST:
-    case ELIBACC:
-    case ELIBBAD:
-    case ELIBMAX:
-    case ELIBSCN:
-    case ELIBEXEC:
-    case ELOOP:
-    case EMEDIUMTYPE:
-    case EMFILE:
-    case EMLINK:
-    case EMSGSIZE:
-    case EMULTIHOP:
-    case ENAMETOOLONG:
-    case ENETDOWN:
-    case ENETRESET:
-    case ENETUNREACH:
-    case ENFILE:
-    case ENOBUFS:
-    case ENODATA:
-    case ENODEV:
-    case ENOENT:
-    case ENOEXEC:
-    case ENOKEY:
-    case ENOLCK:
-    case ENOLINK:
-    case ENOMEDIUM:
-    case ENOMEM:
-    case ENOMSG:
-    case ENONET:
-    case ENOPKG:
-    case ENOPROTOOPT:
-    case ENOSPC:
-    case ENOSR:
-    case ENOSTR:
-    case ENOSYS:
-    case ENOTBLK:
-    case ENOTCONN:
-    case ENOTDIR:
-    case ENOTEMPTY:
-    case ENOTSOCK:
-    case ENOTTY:
-    case ENOTUNIQ:
-    case ENXIO:
-    case EOPNOTSUPP:
-    case EOVERFLOW:
-    case EPERM:
-    case EPFNOSUPPORT:
-    case EPIPE:
-    case EPROTO:
-    case EPROTONOSUPPORT:
-    case EPROTOTYPE:
-    case ERANGE:
-    case EREMCHG:
-    case EREMOTE:
-    case EREMOTEIO:
-    case ERESTART:
-    case EROFS:
-    case ESHUTDOWN:
-    case ESPIPE:
-    case ESOCKTNOSUPPORT:
-    case ESRCH:
-    case ESTALE:
-    case ESTRPIPE:
-    case ETIME:
-    case ETIMEDOUT:
-    case ETXTBSY:
-    case EUCLEAN:
-    case EUNATCH:
-    case EUSERS:
-    case EWOULDBLOCK:
-    case EXDEV:
-    case EXFULL:
+    case E2BIG:        case EACCES:          case EADDRINUSE:   case EADDRNOTAVAIL:
+    case EAFNOSUPPORT: case EALREADY:        case EBADE:        case EBADF:
+    case EBADFD:       case EBADMSG:         case EBADR:        case EBADRQC:
+    case EBADSLT:      case EBUSY:           case ECANCELED:    case ECHILD:
+    case ECHRNG:       case ECOMM:           case ECONNABORTED: case ECONNREFUSED:
+    case ECONNRESET:   case EDEADLOCK:       case EDESTADDRREQ: case EDOM:
+    case EDQUOT:       case EEXIST:          case EFAULT:       case EFBIG:
+    case EHOSTDOWN:    case EHOSTUNREACH:    case EIDRM:        case EILSEQ:
+    case EINPROGRESS:  case EINTR:           case EINVAL:       case EIO:
+    case EISCONN:      case EISDIR:          case EISNAM:       case EKEYEXPIRED:
+    case EKEYREJECTED: case EKEYREVOKED:     case EL2HLT:       case EL2NSYNC:
+    case EL3HLT:       case EL3RST:          case ELIBACC:      case ELIBBAD:
+    case ELIBMAX:      case ELIBSCN:         case ELIBEXEC:     case ELOOP:
+    case EMEDIUMTYPE:  case EMFILE:          case EMLINK:       case EMSGSIZE:
+    case EMULTIHOP:    case ENAMETOOLONG:    case ENETDOWN:     case ENETRESET:
+    case ENFILE:       case ENOBUFS:         case ENODATA:      case ENODEV:
+    case ENOENT:       case ENOEXEC:         case ENOKEY:       case ENOLCK:
+    case ENOLINK:      case ENOMEDIUM:       case ENOMEM:       case ENOMSG:
+    case ENONET:       case ENOPKG:          case ENOPROTOOPT:  case ENOSPC:
+    case ENOSR:        case ENOSTR:          case ENOSYS:       case ENOTBLK:
+    case ENOTCONN:     case ENOTDIR:         case ENOTEMPTY:    case ENOTSOCK:
+    case ENOTTY:       case ENOTUNIQ:        case ENXIO:        case EOPNOTSUPP:
+    case EOVERFLOW:    case EPERM:           case EPFNOSUPPORT: case EPIPE:
+    case EPROTO:       case EPROTONOSUPPORT: case EPROTOTYPE:   case ERANGE:
+    case EREMCHG:      case EREMOTE:         case EREMOTEIO:    case ERESTART:
+    case EROFS:        case ESHUTDOWN:       case ESPIPE:       case ESOCKTNOSUPPORT:
+    case ESRCH:        case ESTALE:          case ESTRPIPE:     case ETIME:
+    case ETIMEDOUT:    case ETXTBSY:         case EUCLEAN:      case EUNATCH:
+    case EUSERS:       case EWOULDBLOCK:     case EXDEV:        case EXFULL:
+    //
+    case ENETUNREACH: printf("ENETUNREACH"); return JVH_ERR_NET_UNREACHABLE; break;
     default:
         return JVH_ERR_UNKNOWN;
     }
 }
+// clang-format on
 
 // @TODO: Merge this function with the winsock one, as they're practically identical
 static jvh_error jvh__connect(struct jvh_env *env, const char *server_name, const char *port, jvh_response *response) {
