@@ -115,8 +115,15 @@ typedef enum {
     JVH_ERR_UNKNOWN = 5000,
 } jvh_error;
 
+typedef enum {
+    JVH_TRANSFER_NORMAL = 0,
+    JVH_TRANSFER_CHUNKED = 1,
+    JVH_TRANSFER_GZIP = 1 << 1
+} jvh_encoding;
+
 typedef struct {
     int status_code;
+    jvh_encoding transfer_encodings;
     char _buffer[JV_HTTP_RESPONSE_BUFFER_LEN];
     int _bytes_in_buffer;
     int _buffer_offset;
@@ -411,6 +418,19 @@ static int jvh__str_find_first(const char *s, char c, int max_len) {
     return result;
 }
 
+// returns 1 if line starts with s
+static int jvh__str_line_starts_with(const char *l, const char *s, int line_len) {
+    int i = 0;
+    for(; i < line_len; i++, l++, s++) {
+        if(!*s) {
+            return 1;
+        }
+        if(*l != *s) {
+            return 0;
+        }
+    }
+    return 0;
+}
 static jvh_error jvh__parse_headers(jvh_response *response) {
     int bytes_read;
     int errcode;
@@ -431,8 +451,21 @@ static jvh_error jvh__parse_headers(jvh_response *response) {
     while(next_line_pos - cur_pos > 2) {
         cur_pos = next_line_pos + 1;
         next_line_pos = cur_pos + jvh__str_find_first(response->_buffer + cur_pos, '\n', bytes_read - cur_pos);
-    }
 
+        if(jvh__str_line_starts_with(response->_buffer + cur_pos, "Transfer-Encoding:", next_line_pos - cur_pos)) {
+            char *transfer_encodings_str = response->_buffer + cur_pos + 18;
+            int encs_len = next_line_pos - cur_pos - 18;
+            transfer_encodings_str[encs_len] = 0; // make it safer for strstr
+            response->transfer_encodings = JVH_TRANSFER_NORMAL;
+
+            if(strstr(transfer_encodings_str, "chunked") != NULL) {
+                response->transfer_encodings |= JVH_TRANSFER_CHUNKED;
+            }
+            if(strstr(transfer_encodings_str, "gzip") != NULL) {
+                response->transfer_encodings |= JVH_TRANSFER_GZIP;
+            }
+        }
+    }
     response->_buffer_offset = next_line_pos + 1;
     response->_bytes_in_buffer = bytes_read;
     return JVH_ERR_OK;
